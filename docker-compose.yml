@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres_dwh:
+    image: postgres:15-alpine
+    container_name: aemps_postgres_dwh
+    restart: always
+    environment:
+      POSTGRES_USER: yeray_admin
+      POSTGRES_PASSWORD: mi_password_seguro
+      POSTGRES_DB: aemps_warehouse
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
