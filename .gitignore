@@ -1,0 +1,8 @@
+# Entorno virtual de Python
+env/
+venv/
+__pycache__/
+*.pyc
+
+# Datos en bruto (¡Los datos se quedan en local/DWH!)
+*.json
