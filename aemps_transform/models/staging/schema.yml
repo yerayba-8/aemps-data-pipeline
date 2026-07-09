@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: stg_medicamentos
+    description: "Capa de staging que aplana los atributos principales de los medicamentos."
+    columns:
+      - name: medicamento_id
+        description: "Clave primaria autoincremental de la base de datos local."
+        tests:
+          - unique
+          - not_null
+      
+      - name: numero_registro
+        description: "El número de registro oficial otorgado por la AEMPS (identificador único comercial)."
+        tests:
+          - unique
+          - not_null
+      
+      - name: nombre_medicamento
+        description: "El nombre comercial del medicamento."
+        tests:
+          - not_null
+
+  - name: stg_principios_activos
+    description: "Detalle atómico de los principios activos asociados a cada medicamento."
+    columns:
+      - name: principio_activo_pk
+        description: "Clave primaria calculada mediante MD5 (medicamento_id + principio_activo_id)."
+        tests:
+          - unique
+          - not_null
+
+      - name: medicamento_id
+        description: "Clave foránea que conecta con el modelo principal del medicamento."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_medicamentos')
+                field: medicamento_id
+    

@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: aemps_raw_source  # El identificador interno de la fuente
+    database: aemps_warehouse
+    schema: public
+    tables:
+      - name: raw_medicamentos  # La tabla real que creamos con Python
+        description: "Catálogo completo de medicamentos inyectado en bruto desde la API CIMA."
