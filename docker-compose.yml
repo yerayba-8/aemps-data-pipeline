@@ -14,5 +14,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  airflow:
+    image: apache/airflow:2.10.2-python3.9
+    container_name: aemps_airflow
+    restart: always
+    command: standalone
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./aemps_transform:/opt/airflow/aemps_transform
+      - ./extract.py:/opt/airflow/extract.py
+      - ~/.dbt:/opt/airflow/.dbt  # Mapeamos tus perfiles de dbt locales para que Airflow los lea
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - DBT_PROFILES_DIR=/opt/airflow/.dbt  # Indicamos a dbt dónde buscar el archivo profiles.yml
+      - _PIP_ADDITIONAL_REQUIREMENTS=dbt-core==1.10.22 dbt-postgres==1.9.1 requests
+    depends_on:
+      - postgres_dwh
+
 volumes:
   postgres_data:
