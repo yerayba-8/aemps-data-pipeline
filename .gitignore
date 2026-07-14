@@ -5,4 +5,21 @@ __pycache__/
 *.pyc
 
 # Datos en bruto (¡Los datos se quedan en local/DWH!)
+*.json.env
+
+# Entorno virtual
+.env/
+venv/
+env/
+
+# Logs de Airflow
+logs/
+
+# Datos locales y archivos de prueba
 *.json
+jaffle_shop/
+
+# dbt
+aemps_transform/target/
+aemps_transform/dbt_packages/
+aemps_transform/logs/
