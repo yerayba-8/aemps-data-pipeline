@@ -1,4 +1,4 @@
-# 💊 AEMPS Data Pipeline: Mi Proyecto de Porfolio ELT
+# 💊 AEMPS Data Pipeline — ELT de medicamentos españoles con Airflow + dbt
 
 ¡Hola! Este es mi proyecto para poner en práctica mis conocimientos en Ingeniería de Datos. He construido un pipeline ELT (Extract, Load, Transform) completo para extraer, almacenar y modelar la información de medicamentos de la **Agencia Española de Medicamentos y Productos Sanitarios (AEMPS)**.
 
@@ -15,6 +15,8 @@ Para este proyecto quería ir más allá de los scripts locales y montar un ento
 *   **Transformación:** **dbt (Data Build Tool)** para organizar mis consultas SQL, crear vistas de staging y generar la tabla final de dimensiones.
 *   **Orquestación:** **Apache Airflow** para automatizar la ejecución diaria de las tareas y controlar que todo corra en el orden correcto.
 *   **Infraestructura:** **Docker y Docker Compose** para meter todo el ecosistema (Postgres, Airflow, pgAdmin) en contenedores y asegurarme de que funcione en cualquier máquina.
+
+![Flujo de Trabajo](https://github.com/user-attachments/assets/7e03d896-b550-4b6e-8da9-6b508c54c3cd)
 
 ---
 
