@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: dim_medicamentos
+    description: "Tabla de dimensión maestra de medicamentos enriquecida con sus componentes químicos agregados."
+    columns:
+      - name: medicamento_id
+        description: "Clave primaria única e indestructible de la dimensión."
+        tests:
+          - unique
+          - not_null
+
+      - name: numero_registro
+        description: "Código oficial de la AEMPS. Debe seguir siendo único en la tabla final."
+        tests:
+          - unique
+          - not_null
+
+      - name: numero_principios_activos
+        description: "Contador de componentes químicos. Validamos que no sea un valor negativo."
+        tests:
+          - not_null

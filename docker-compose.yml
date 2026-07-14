@@ -32,6 +32,18 @@ services:
       - _PIP_ADDITIONAL_REQUIREMENTS=dbt-core==1.10.22 dbt-postgres==1.9.1 requests
     depends_on:
       - postgres_dwh
+  
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: aemps_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres_dwh
 
 volumes:
   postgres_data:

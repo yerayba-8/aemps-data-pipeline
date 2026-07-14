@@ -24,7 +24,7 @@ models:
   - name: stg_principios_activos
     description: "Detalle atómico de los principios activos asociados a cada medicamento."
     columns:
-      - name: principio_activo_pk
+      - name: principio_activo_id
         description: "Clave primaria calculada mediante MD5 (medicamento_id + principio_activo_id)."
         tests:
           - unique
