@@ -6,6 +6,7 @@ __pycache__/
 
 # Datos en bruto (¡Los datos se quedan en local/DWH!)
 *.json.env
+*.jsonl.env
 
 # Entorno virtual
 .env/
@@ -17,9 +18,14 @@ logs/
 
 # Datos locales y archivos de prueba
 *.json
+.jsonl
 jaffle_shop/
 
 # dbt
 aemps_transform/target/
 aemps_transform/dbt_packages/
 aemps_transform/logs/
+.env
+.venv/
+*.jsonl
+fallidos.txt
