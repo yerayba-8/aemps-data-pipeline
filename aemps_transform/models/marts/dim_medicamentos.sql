@@ -25,9 +25,9 @@ select
     m.nombre_medicamento,
     m.laboratorio_titular,
     m.condicion_prescripcion,
-    -- Si el medicamento no tiene principios  activos en el JSON, asignamos 0 y un texto descriptivo
-    coalesce(p.numero_principios_activos,0) as numero_principios_activos,
-    coalesce(p.lista_principios_activos, 'Sin principio activo especificado') as lista_principios_activos,
+        -- Si el medicamento no tiene principios activos en el JSON, el conteo es 0 y la lista queda NULL
+    coalesce(p.numero_principios_activos, 0) as numero_principios_activos,
+    p.lista_principios_activos,
     m.fecha_ingesta
     from medicamentos m
     left join principios_agregados p on m.medicamento_id = p.medicamento_id
