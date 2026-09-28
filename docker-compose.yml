@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: yeray_admin
-      POSTGRES_PASSWORD: mi_password_seguro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: aemps_warehouse
     ports:
       - "5432:5432"
