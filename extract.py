@@ -8,8 +8,9 @@ Fase 2: endpoint de detalle, uno por medicamento -> detalle_medicamentos.jsonl
 
 Uso:
     python extract.py 1
-    python extract.py 2 --limite 50     # prueba con 50 medicamentos
-    python extract.py 2                 # descarga completa (se puede reanudar)
+    python extract.py 2 --limite 50       # prueba con 50 medicamentos
+    python extract.py 2                   # incremental: solo descarga los nregistro nuevos
+    python extract.py 2 --completo        # redescarga TODOS, para detectar cambios (carga semanal)
 """
 import argparse
 import json
@@ -25,6 +26,11 @@ URL_DETALLE = "https://cima.aemps.es/cima/rest/medicamento"
 
 ARCHIVO_CATALOGO = Path("catalogo_completo_medicamentos.json")
 ARCHIVO_DETALLE = Path("detalle_medicamentos.jsonl")
+# Archivo de trabajo de una redescarga --completo en curso. Se usa un nombre
+# distinto al definitivo para que ARCHIVO_DETALLE (el que lee load.py) nunca
+# quede en un estado a medias: solo se sustituye cuando la redescarga termina
+# sin fallidos.
+ARCHIVO_DETALLE_COMPLETO_TMP = Path("detalle_medicamentos.completo.tmp.jsonl")
 ARCHIVO_FALLIDOS = Path("fallidos.txt")
 
 RESULTADOS_POR_PAGINA = 200
@@ -84,15 +90,12 @@ def fase_1():
                 {"pagina": pagina, "nresultados": RESULTADOS_POR_PAGINA},
             )
             if datos is None:
-                # Antes: break + mensaje de éxito. Ahora: se aborta sin guardar
-                # un catálogo cortado.
                 raise RuntimeError(
                     f"La página {pagina} falló tras {INTENTOS} intentos. "
                     "No se guarda un catálogo incompleto."
                 )
             resultados.extend(datos.get("resultados", []))
 
-    # Validación: deduplicar por nregistro y comparar con lo que anuncia la API
     unicos = {str(r["nregistro"]): r for r in resultados}
     if len(unicos) != total_filas:
         raise RuntimeError(
@@ -100,7 +103,6 @@ def fase_1():
             f"descargado {len(unicos)} distintos ({len(resultados)} filas en total)."
         )
 
-    # Escritura atómica: primero a un archivo temporal y luego se renombra
     temporal = ARCHIVO_CATALOGO.with_suffix(".tmp")
     with open(temporal, "w", encoding="utf-8") as f:
         json.dump(list(unicos.values()), f, ensure_ascii=False, indent=2)
@@ -112,20 +114,15 @@ def fase_1():
 # ----------------------------------------------------------------------
 # FASE 2: detalle de cada medicamento (reanudable)
 # ----------------------------------------------------------------------
-def cargar_ya_descargados():
-    """Devuelve el set de nregistro que ya están en el archivo JSONL.
-
-    Si el programa se cortó a mitad de escribir, la última línea puede estar
-    incompleta. Esas líneas se descartan y el archivo se reescribe limpio, para
-    que ese medicamento se vuelva a pedir.
-    """
+def cargar_ya_descargados(ruta):
+    """Devuelve el set de nregistro que ya están en el archivo JSONL indicado."""
     hechos = set()
-    if not ARCHIVO_DETALLE.exists():
+    if not ruta.exists():
         return hechos
 
     lineas_validas = []
     corruptas = 0
-    with open(ARCHIVO_DETALLE, encoding="utf-8") as f:
+    with open(ruta, encoding="utf-8") as f:
         for linea in f:
             linea = linea.strip()
             if not linea:
@@ -139,44 +136,44 @@ def cargar_ya_descargados():
 
     if corruptas:
         print(f"Aviso: {corruptas} línea(s) incompleta(s) descartada(s) y reescritas.")
-        with open(ARCHIVO_DETALLE, "w", encoding="utf-8") as f:
+        with open(ruta, "w", encoding="utf-8") as f:
             for linea in lineas_validas:
                 f.write(linea + "\n")
 
     return hechos
 
 
-def fase_2(limite=None):
+def fase_2(limite=None, completo=False):
     if not ARCHIVO_CATALOGO.exists():
         raise RuntimeError(f"Falta '{ARCHIVO_CATALOGO}'. Ejecuta primero: python extract.py 1")
 
     with open(ARCHIVO_CATALOGO, encoding="utf-8") as f:
         catalogo = json.load(f)
 
-    # str(): el nregistro es texto en toda la API. Si aquí se convirtiera a
-    # número, la comparación con 'hechos' no coincidiría nunca.
     nregistros = [str(m["nregistro"]) for m in catalogo]
     if limite:
         nregistros = nregistros[:limite]
 
-    hechos = cargar_ya_descargados()
+    if completo:
+        archivo_trabajo = ARCHIVO_DETALLE_COMPLETO_TMP
+        print("Fase 2 (--completo): redescargando TODOS los medicamentos del catálogo actual.")
+    else:
+        archivo_trabajo = ARCHIVO_DETALLE
+
+    hechos = cargar_ya_descargados(archivo_trabajo)
     pendientes = [n for n in nregistros if n not in hechos]
     print(f"Fase 2: {len(hechos)} ya descargados, {len(pendientes)} pendientes.")
 
     fallidos = []
-    # Modo "a" (append): se añade al final sin borrar lo ya descargado.
-    # Con "w" cada ejecución empezaría de cero.
-    with requests.Session() as sesion, open(ARCHIVO_DETALLE, "a", encoding="utf-8") as f:
+    with requests.Session() as sesion, open(archivo_trabajo, "a", encoding="utf-8") as f:
         for i, nregistro in enumerate(pendientes, start=1):
             detalle = pedir_json(sesion, URL_DETALLE, {"nregistro": nregistro})
 
             if detalle is None or str(detalle.get("nregistro")) != nregistro:
-                # No se escribe nada: así el medicamento sigue "pendiente"
-                # y se reintentará en la próxima ejecución.
                 fallidos.append(nregistro)
             else:
                 f.write(json.dumps(detalle, ensure_ascii=False) + "\n")
-                f.flush()  # a disco ya: si se corta, esta línea no se pierde
+                f.flush()
 
             if i % 100 == 0 or i == len(pendientes):
                 print(f"  {i}/{len(pendientes)} procesados ({len(fallidos)} fallidos)")
@@ -185,26 +182,38 @@ def fase_2(limite=None):
     if fallidos:
         ARCHIVO_FALLIDOS.write_text("\n".join(fallidos) + "\n", encoding="utf-8")
         print(f"{len(fallidos)} fallidos, listados en '{ARCHIVO_FALLIDOS}'. "
-              "Vuelve a ejecutar la fase 2 para reintentarlos.")
+              "Vuelve a ejecutar la fase 2 (con el mismo modo) para reintentarlos.")
     elif ARCHIVO_FALLIDOS.exists():
         ARCHIVO_FALLIDOS.unlink()
 
-    resumen()
+    if completo:
+        if fallidos:
+            print(
+                f"Redescarga completa incompleta ({len(fallidos)} fallidos). "
+                f"'{ARCHIVO_DETALLE}' NO se ha modificado todavía."
+            )
+        else:
+            archivo_trabajo.replace(ARCHIVO_DETALLE)
+            print(f"Redescarga completa terminada. '{ARCHIVO_DETALLE}' actualizado con {len(nregistros)} medicamentos.")
+
+    resumen(ARCHIVO_DETALLE if (not completo or not fallidos) else archivo_trabajo)
     return fallidos
 
 
-def resumen():
+def resumen(ruta):
     """Cuenta cuántos medicamentos del JSONL traen principiosActivos."""
+    if not ruta.exists():
+        return
     total = 0
     sin_principios = 0
-    with open(ARCHIVO_DETALLE, encoding="utf-8") as f:
+    with open(ruta, encoding="utf-8") as f:
         for linea in f:
             if not linea.strip():
                 continue
             total += 1
             if not json.loads(linea).get("principiosActivos"):
                 sin_principios += 1
-    print(f"\nEn '{ARCHIVO_DETALLE}': {total} medicamentos, "
+    print(f"\nEn '{ruta}': {total} medicamentos, "
           f"{sin_principios} sin 'principiosActivos'.")
 
 
@@ -213,13 +222,19 @@ def main():
     parser = argparse.ArgumentParser(description="Extracción del catálogo CIMA/AEMPS")
     parser.add_argument("fase", choices=["1", "2"], help="1 = listado, 2 = detalle")
     parser.add_argument("--limite", type=int, help="solo para la fase 2: procesar N medicamentos")
+    parser.add_argument(
+        "--completo",
+        action="store_true",
+        help="fase 2: redescarga el detalle de TODOS los medicamentos del catálogo, "
+             "no solo los nuevos (para detectar cambios en carga semanal)",
+    )
     args = parser.parse_args()
 
     try:
         if args.fase == "1":
             fase_1()
         else:
-            fallidos = fase_2(args.limite)
+            fallidos = fase_2(args.limite, completo=args.completo)
             if fallidos:
                 sys.exit(1)
     except RuntimeError as e:
