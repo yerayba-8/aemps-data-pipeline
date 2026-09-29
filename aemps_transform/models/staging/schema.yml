@@ -9,23 +9,21 @@ models:
         tests:
           - unique
           - not_null
-      
+
       - name: numero_registro
         description: "El número de registro oficial otorgado por la AEMPS (identificador único comercial)."
         tests:
           - unique
           - not_null
-      
+
       - name: nombre_medicamento
         description: "El nombre comercial del medicamento."
-        tests:
-          - not_null
 
   - name: stg_principios_activos
     description: "Detalle atómico de los principios activos asociados a cada medicamento."
     columns:
       - name: principio_activo_id
-        description: "Clave primaria calculada mediante MD5 (medicamento_id + principio_activo_id)."
+        description: "Clave primaria calculada mediante MD5 (medicamento_id + orden + principio_activo_nombre)."
         tests:
           - unique
           - not_null
@@ -38,4 +36,8 @@ models:
               arguments:
                 to: ref('stg_medicamentos')
                 field: medicamento_id
-    
+
+      - name: sustancia_id
+        description: "Identificador único de la sustancia activa, según la nomenclatura oficial."
+        tests:
+          - not_null

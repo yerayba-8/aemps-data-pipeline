@@ -1,12 +1,12 @@
 {{ config(materialized='view') }}
 
 with datos_en_bruto as (
-    select * from {{ source('aemps_raw_source', 'raw_medicamentos') }}
+    select * from {{ source('aemps_raw_source', 'raw_medicamentos_detalle') }}
 )
 
 select
     id as medicamento_id,
-    data->>'nregistro' as numero_registro,
+    nregistro as numero_registro,
     data->>'nombre' as nombre_medicamento,
     data->>'labtitular' as laboratorio_titular,
     (data->>'cpresc')::text as condicion_prescripcion,
