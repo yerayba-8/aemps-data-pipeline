@@ -1,11 +1,13 @@
 version: 2
 
 sources:
-  - name: aemps_raw_source  # El identificador interno de la fuente
+  - name: aemps_raw_source
     database: aemps_warehouse
     schema: public
     tables:
-      - name: raw_medicamentos  # Carga antigua (julio): listado de CIMA, campo vtm
+      - name: raw_medicamentos
         description: "Carga antigua (julio) del listado de CIMA. Contiene solo el campo vtm, insuficiente para contar principios activos reales. Se conserva para comparar, no se usa en los modelos de staging vigentes."
-      - name: raw_medicamentos_detalle  # Detalle por medicamento, con principiosActivos completo
-        description: "Detalle de cada medicamento desde el endpoint /medicamento de CIMA, con el array principiosActivos completo. Clave natural: nregistro. Fuente vigente de los modelos de staging."
+      - name: raw_medicamentos_detalle
+        description: "Detalle de cada medicamento desde el endpoint /medicamento de CIMA, con el array principiosActivos completo. Clave natural: nregistro. Es upsert-only: nunca pierde una fila aunque el medicamento cause baja en CIMA."
+      - name: raw_catalogo_activo
+        description: "Listado de nregistro vigentes en CIMA ahora mismo (endpoint /medicamentos). Se trunca y recarga entera en cada ejecución, por lo que SÍ refleja las bajas. stg_medicamentos la usa para filtrar los medicamentos activos."
