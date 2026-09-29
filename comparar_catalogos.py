@@ -54,3 +54,26 @@ print("  viejo:        ", con_letras(viejo), "de", len(viejo))
 print("  nuevo:        ", con_letras(nuevo), "de", len(nuevo))
 print("  desaparecidos:", con_letras(desaparecidos), "de", len(desaparecidos))
 print("  nuevos:       ", con_letras(nuevos), "de", len(nuevos))
+
+import json
+import pandas as pd
+from dotenv import load_dotenv
+import os
+from sqlalchemy import create_engine
+
+load_dotenv()
+url = (f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+       f"@localhost:5432/{os.getenv('POSTGRES_DB')}")
+engine = create_engine(url)
+
+df_viejo = pd.read_sql("SELECT numero_registro, nombre_medicamento FROM dim_medicamentos", engine)
+df_viejo["numero_registro"] = df_viejo["numero_registro"].astype(str).str.strip()
+viejo = set(df_viejo["numero_registro"])
+
+with open("catalogo_completo_medicamentos.json", encoding="utf-8") as f:
+    catalogo = json.load(f)
+nuevo = {str(m["nregistro"]).strip() for m in catalogo}
+
+desaparecidos = viejo - nuevo
+ejemplo = df_viejo[df_viejo["numero_registro"].isin(list(desaparecidos)[:5])]
+print(ejemplo)
