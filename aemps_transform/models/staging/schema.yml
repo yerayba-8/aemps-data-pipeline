@@ -34,7 +34,7 @@ models:
           - not_null
           - relationships:
               arguments:
-                to: ref('stg_medicamentos')
+                to: ref('dim_medicamentos')
                 field: medicamento_id
 
       - name: sustancia_id
