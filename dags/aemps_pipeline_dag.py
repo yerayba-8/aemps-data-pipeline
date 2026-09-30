@@ -2,44 +2,74 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-# 1. Definimos las políticas de reintento en caso de fallo de red con la API
 default_args = {
     'owner': 'yeray_bueno',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 2,  # Si falla, Airflow lo reintentará 2 veces...
-    'retry_delay': timedelta(minutes=5),   # ...esperando 5 minutos entre cada intento.
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5),
 }
 
-# 2. Inicializamos el DAG
 with DAG(
     'aemps_data_pipeline_v1',
     default_args=default_args,
-    description='Pipeline de datos de la AEMPS: Ingesta API Python + Transformación dbt',
-    schedule_interval='@daily',            # Se ejecutará automáticamente todas las noches
+    description='Pipeline de datos de la AEMPS: Ingesta API Python + Transformación dbt (SCD2 + bajas)',
+    schedule_interval='0 3 * * 1',   # todos los lunes a las 3:00 AM
     start_date=datetime(2026, 1, 1),
-    catchup=False,                         # Evita que ejecute los días pasados del histórico
+    catchup=False,
     tags=['aemps', 'dbt', 'postgres'],
 ) as dag:
-    
-    # Tarea 1: Descargar datos frescos de la API e inyectarlos en la capa Bronze (Postgres)
-    task_ingesta_api = BashOperator(
-        task_id='ingesta_api_python',
-        bash_command='python /opt/airflow/extract.py',
+
+    # 1. Listado actual de medicamentos (rápido, sobrescribe catalogo_completo_medicamentos.json)
+    task_extraccion_listado = BashOperator(
+        task_id='extraccion_listado',
+        bash_command='python /opt/airflow/extract.py 1',
     )
 
-    # Tarea 2: Compilar y ejecutar las transformaciones en la capa Silver y Gold
+    # 2. Detalle completo de TODOS los medicamentos (lento, varias horas: es lo que
+    #    permite detectar cambios en medicamentos ya existentes, no solo altas)
+    task_extraccion_detalle = BashOperator(
+        task_id='extraccion_detalle_completo',
+        bash_command='python /opt/airflow/extract.py 2 --completo',
+    )
+
+    # 3. Carga del detalle a Postgres (upsert, nunca borra)
+    task_carga_detalle = BashOperator(
+        task_id='carga_detalle',
+        bash_command='python /opt/airflow/load.py',
+    )
+
+    # 4. Carga del listado activo a Postgres (truncate + reload: es la señal de
+    #    qué está vigente ahora, la que permite detectar bajas). Solo depende
+    #    del listado (paso 1), así que puede correr en paralelo con el 2.
+    task_carga_catalogo_activo = BashOperator(
+        task_id='carga_catalogo_activo',
+        bash_command='python /opt/airflow/load_catalogo.py',
+    )
+
+    # 5. Snapshot de dbt: historiza cambios y detecta bajas automáticamente
+    task_dbt_snapshot = BashOperator(
+        task_id='dbt_snapshot',
+        bash_command='cd /opt/airflow/aemps_transform && dbt snapshot --target docker',
+    )
+
+    # 6. Transformaciones (dim_medicamentos, medicamentos_baja, etc.)
     task_dbt_run = BashOperator(
         task_id='dbt_transformacion',
         bash_command='cd /opt/airflow/aemps_transform && dbt run --target docker',
     )
 
-    # Tarea 3: Ejecutar los 14 tests de calidad de datos automatizados
+    # 7. Tests de calidad de datos
     task_dbt_test = BashOperator(
         task_id='dbt_control_calidad',
         bash_command='cd /opt/airflow/aemps_transform && dbt test --target docker',
     )
 
-    # 3. Definimos el orden estricto de ejecución (Lineal)
-    task_ingesta_api >> task_dbt_run >> task_dbt_test
+    # Orden: el listado dispara dos ramas en paralelo (detalle completo, y carga
+    # del catalogo activo). El snapshot espera a que AMBAS ramas terminen, porque
+    # stg_medicamentos necesita las dos tablas actualizadas.
+    task_extraccion_listado >> task_extraccion_detalle >> task_carga_detalle
+    task_extraccion_listado >> task_carga_catalogo_activo
+
+    [task_carga_detalle, task_carga_catalogo_activo] >> task_dbt_snapshot >> task_dbt_run >> task_dbt_test

@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: dim_medicamentos
-    description: "Tabla de dimensión maestra de medicamentos enriquecida con sus componentes químicos agregados."
+    description: "Tabla de dimensión maestra de medicamentos enriquecida con sus componentes químicos agregados. Incluye tanto medicamentos activos como dados de baja (ver columna 'activo'), cada uno con su versión más reciente conocida."
     columns:
       - name: medicamento_id
         description: "Clave primaria única e indestructible de la dimensión."
@@ -20,3 +20,23 @@ models:
         description: "Contador de componentes químicos. Validamos que no sea un valor negativo."
         tests:
           - not_null
+
+      - name: activo
+        description: "true si el medicamento sigue vigente en el catálogo actual de CIMA; false si ha causado baja."
+        tests:
+          - not_null
+
+      - name: fecha_baja
+        description: "Fecha en la que dbt detectó que el medicamento dejó de estar en el catálogo activo. NULL si sigue activo."
+
+  - name: medicamentos_baja
+    description: "Subconjunto de dim_medicamentos con únicamente los medicamentos dados de baja, para consulta directa."
+    columns:
+      - name: medicamento_id
+        description: "Clave primaria heredada de dim_medicamentos."
+        tests:
+          - unique
+          - not_null
+
+      - name: activo
+        description: "Siempre false en este modelo, por definición."
