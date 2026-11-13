@@ -19,7 +19,6 @@ logs/
 # Datos locales y archivos de prueba
 *.json
 .jsonl
-jaffle_shop/
 
 # dbt
 aemps_transform/target/
@@ -30,3 +29,5 @@ aemps_transform/logs/
 *.jsonl
 fallidos.txt
 fase2.log
+data/
+logs/

@@ -36,7 +36,7 @@ def conectar():
     if faltan:
         raise RuntimeError(f"Faltan variables en el .env: {faltan}")
     return psycopg2.connect(
-        host="localhost",
+        host=os.getenv("POSTGRES_HOST", "localhost"),
         port=5432,
         dbname=os.getenv("POSTGRES_DB"),
         user=os.getenv("POSTGRES_USER"),
