@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.timetables.trigger import CronTriggerTimetable
+from alertas import avisar_fallo, avisar_exito
 
 default_args = {
     'owner': 'yeray_bueno',
@@ -9,35 +11,41 @@ default_args = {
     'email_on_retry': False,
     'retries': 2,
     'retry_delay': timedelta(minutes=5),
+    'on_failure_callback': avisar_fallo,
 }
 
 with DAG(
     'aemps_data_pipeline_v1',
     default_args=default_args,
     description='Pipeline de datos de la AEMPS: Ingesta API Python + Transformación dbt (SCD2 + bajas)',
-    schedule_interval='0 3 * * 1',   # todos los lunes a las 3:00 AM
+    schedule=CronTriggerTimetable('0 3 * * 1', timezone='Europe/Madrid'),   # todos los lunes a las 3:00 AM
     start_date=datetime(2026, 1, 1),
     catchup=False,
+    max_active_runs=1,
     tags=['aemps', 'dbt', 'postgres'],
+    on_success_callback=avisar_exito,
 ) as dag:
 
     # 1. Listado actual de medicamentos (rápido, sobrescribe catalogo_completo_medicamentos.json)
     task_extraccion_listado = BashOperator(
         task_id='extraccion_listado',
         bash_command='python /opt/airflow/extract.py 1',
+        cwd='/opt/airflow/data'
     )
 
     # 2. Detalle completo de TODOS los medicamentos (lento, varias horas: es lo que
     #    permite detectar cambios en medicamentos ya existentes, no solo altas)
     task_extraccion_detalle = BashOperator(
         task_id='extraccion_detalle_completo',
-        bash_command='python /opt/airflow/extract.py 2 --completo',
+        bash_command='python /opt/airflow/extract.py 2 --completo --ritmo 15',
+        cwd='/opt/airflow/data'
     )
 
     # 3. Carga del detalle a Postgres (upsert, nunca borra)
     task_carga_detalle = BashOperator(
         task_id='carga_detalle',
         bash_command='python /opt/airflow/load.py',
+        cwd='/opt/airflow/data'
     )
 
     # 4. Carga del listado activo a Postgres (truncate + reload: es la señal de
@@ -46,24 +54,28 @@ with DAG(
     task_carga_catalogo_activo = BashOperator(
         task_id='carga_catalogo_activo',
         bash_command='python /opt/airflow/load_catalogo.py',
+        cwd='/opt/airflow/data'
     )
 
     # 5. Snapshot de dbt: historiza cambios y detecta bajas automáticamente
     task_dbt_snapshot = BashOperator(
         task_id='dbt_snapshot',
         bash_command='cd /opt/airflow/aemps_transform && dbt snapshot --target docker',
+        cwd='/opt/airflow/data'
     )
 
     # 6. Transformaciones (dim_medicamentos, medicamentos_baja, etc.)
     task_dbt_run = BashOperator(
         task_id='dbt_transformacion',
         bash_command='cd /opt/airflow/aemps_transform && dbt run --target docker',
+        cwd='/opt/airflow/data'
     )
 
     # 7. Tests de calidad de datos
     task_dbt_test = BashOperator(
         task_id='dbt_control_calidad',
         bash_command='cd /opt/airflow/aemps_transform && dbt test --target docker',
+        cwd='/opt/airflow/data'
     )
 
     # Orden: el listado dispara dos ramas en paralelo (detalle completo, y carga
